@@ -7,7 +7,13 @@ class BooleanOperation {
     }
     
     toString() {
-        return '(' + this.value.join(this.operator) + ')';
+        if (this.value instanceof Array) {
+            return '(' + this.value.join(this.operator) + ')';
+        } else if (this.value.length) {
+            return '(' + this.value + ')';
+        }
+
+        return '';
     }
 }
 module.exports = BooleanOperation;
