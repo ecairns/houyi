@@ -11,7 +11,7 @@ class Field {
     }
 
     toString() {
-        return this.value;
+        return this.name + ':' + this.value;
     }
 }
 module.exports = Field;
