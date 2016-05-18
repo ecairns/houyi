@@ -1,17 +1,21 @@
 "use strict";
 
 class Field {
-    constructor(field) {
-        this.name = field.name;
-        this.value = field.value;
-    }
+  constructor(field) {
+    this.name     = field.name;
+    this.operator = field.operator;
+    this.value    = field.value;
+  }
 
-    inspect() {
-        return this.toString();
-    }
+  inspect() {
+    return this.toString();
+  }
 
-    toString() {
-        return this.name + ':' + this.value;
+  toString() {
+    if (!isNaN(this.name)) {
+      return this.value;
     }
+    return this.name + ':' + this.value;
+  }
 }
 module.exports = Field;

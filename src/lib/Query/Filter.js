@@ -5,73 +5,152 @@ const BooleanOperation = require('./BooleanOperation');
 const ToOperation      = require('./ToOperation');
 
 const AND = ' AND ';
-const OR = ' OR ';
+const OR  = ' OR ';
 
 class Filter {
-  constructor(filter, defaultDelim) {
-    this.defaultDelim = defaultDelim | AND;
-    this.filter       = this.parse(filter, defaultDelim);
+  /**
+   *
+   * @param filter
+   * @param defaultOperator - Solr default Operator, 'OR'
+   */
+  constructor(filter, defaultOperator) {
+    if (!defaultOperator) {
+      this.defaultOperator = OR;
+    } else {
+      const operator = defaultOperator.trim().toLowerCase();
+      switch (operator) {
+        case 'and':
+          this.defaultOperator = AND;
+          break;
+        case 'or':
+          this.defaultOperator = OR;
+          break;
+        default:
+          throw new Error('Operator (' + defaultOperator + ') unknown')
+      }
+    }
+
+    this.filter       = this.parse(filter, AND);
     this.filterString = this.build(this.filter);
   }
 
-  parse(content, delim, fieldName) {
-    console.log(content);
+  /**
+   *
+   * @param content
+   * @param delim
+   * @returns {*}
+   */
+  parseArray(content, delim) {
+    let results = null;
+    let vals  = [];
+    for (let i in content) {
+      let value = content[i];
+      if (value instanceof Object) {
+        value = '(' + this.parseObject(value) + ')';
+      }
+
+      vals.push(value);
+    }
+
+    results = '(' + vals.join(delim) + ')';
+
+    return results;
+  }
+
+  /**
+   *
+   * @param content
+   * @returns {Array}
+   */
+  parseObject(content) {
+    const filters = [];
+
+    for (let name in content) {
+      let value     = content[name];
+      let operation = null;
+
+      /** Check if value is an object **/
+      switch (name) {
+        case 'to':
+          operation = new ToOperation({value});
+          break;
+
+        case 'or':
+          value = this.parse(value, OR, name);
+
+          if (value instanceof Object) {
+            operation = new BooleanOperation({name, operator: AND, value: value});
+          } else {
+            operation = [value];
+          }
+          break;
+
+        case 'and':
+          value = this.parse(value, AND, name);
+
+          if (value instanceof Object) {
+            operation = new BooleanOperation({name, operator: AND, value: value});
+          } else {
+            operation = [value];
+          }
+          break;
+
+        default:
+          if (value instanceof Object) {
+            if (value instanceof Array) {
+              value = this.parseArray(value, this.defaultOperator);
+            } else {
+              value = this.parse(value, AND, name);
+            }
+
+            if (value.length) {
+              operation = new FieldOperation({name, value: value});
+            }
+
+          } else if (isNaN(name)) {
+            if (value.length) {
+              operation = new FieldOperation({name, value});
+            }
+
+          } else {
+            operation = value;
+          }
+
+          break;
+      }
+
+      if (operation) {
+        filters.push(operation);
+      }
+    }
+
+    return filters.join(AND);
+  }
+
+  /**
+   *
+   * @param content
+   * @param delim
+   * @returns {*}
+   */
+  parse(content, delim) {
+    this.parseDepth = this.parseDepth || 0;
+    this.parseDepth++;
+
+    let results = content;
     if (content instanceof Object) {
       let filters = null;
 
       if (content instanceof Array) {
-        filters = content.map(value => {
-          return this.parse(value, delim);
-        });
+        results = this.parseArray(content, delim);
 
       } else {
-        filters = [];
-
-        for (let name in content) {
-          let value     = content[name];
-          let operation = null;
-
-          if (Object.keys(value).length !== 0) {
-            switch (name) {
-              case 'to':
-                operation = new ToOperation({value});
-                break;
-              case 'or':
-                operation = new BooleanOperation({name, operator: OR, value: this.parse(value, OR, name)});
-                break;
-              case 'and':
-                operation = new BooleanOperation({name, operator: AND, value: this.parse(value, AND, name)});
-                break;
-              default:
-                if (value instanceof Object) {
-                  value     = this.parse(value, delim);
-                  operation = new FieldOperation({name, value});
-                } else if (isNaN(name)) {
-                  operation = new FieldOperation({name, value});
-                } else {
-                  operation = value;
-                }
-
-                break;
-            }
-          }
-
-          if (operation) {
-            filters.push(operation);
-          }
-        }
+        results = this.parseObject(content);
       }
-
-      let results = filters.join(delim);
-      
-      if (fieldName) {
-     //   results = '(' + results + ')';
-      }
-      
-      return results;
     }
 
-    return content;
+    this.parseDepth--;
+    return results;
   }
 
   /**
