@@ -4,4 +4,4 @@ module.exports = {
         UPDATE: 'update',
         PING: 'admin/ping'
     }
-}
+};

@@ -8,28 +8,6 @@ const AND = ' AND ';
 const OR  = ' OR ';
 
 /**
- * Verified passed operator is allowed.
- *
- * @param operator
- * @returns {*}
- */
-function checkOperator(operator) {
-  const checkOperator = operator.trim().toUpperCase();
-  switch (checkOperator) {
-    case 'AND':
-      operator = AND;
-      break;
-    case 'OR':
-      operator = OR;
-      break;
-    default:
-      throw new Error('Operator (' + operator + ') unknown')
-  }
-
-  return operator;
-}
-
-/**
  * Filter class
  */
 class Filter {
@@ -42,12 +20,72 @@ class Filter {
   constructor(filter, defaultObjectOperator, defaultSolrOperator) {
     defaultObjectOperator = defaultObjectOperator || AND;
     defaultSolrOperator   = defaultSolrOperator || OR;
+    this.filter           = filter;
 
-    this.defaultObjectOperator = checkOperator(defaultObjectOperator);
-    this.defaultSolrOperator   = checkOperator(defaultSolrOperator);
+    this.defaultObjectOperator = this.checkOperator(defaultObjectOperator);
+    this.defaultSolrOperator   = this.checkOperator(defaultSolrOperator);
+    if (filter) {
+      this.toString();
+    }
+  }
 
-    this.filter       = this.parse(filter, this.defaultObjectOperator);
-    this.filterString = this.build(this.filter);
+  /**
+   * Verified passed operator is allowed.
+   *
+   * @param operator
+   * @returns {*}
+   */
+  checkOperator(operator) {
+    const checkOperator = operator.trim().toUpperCase();
+    switch (checkOperator) {
+      case 'AND':
+        operator = AND;
+        break;
+      case 'OR':
+        operator = OR;
+        break;
+      default:
+        throw new Error('Operator (' + operator + ') unknown');
+    }
+
+    return operator;
+  }
+
+  /**
+   *
+   * @returns {string|*}
+   */
+  toString() {
+
+    if (!this.filterString) {
+      this.filter       = this.parse(null, this.filter, this.defaultObjectOperator, this.defaultSolrOperator);
+      this.filterString = this.build(this.filter);
+    }
+
+    return this.filterString;
+  }
+
+  /**
+   *
+   * @param name
+   * @param value
+   * @param operator
+   * @returns {*}
+   */
+  parseOperation(name, value, operator, defaultArrayOperator) {
+    let operation = null;
+
+    console.log("AAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA");
+    console.log(name, value, operator, defaultArrayOperator);
+    value = this.parse(name, value, operator, defaultArrayOperator);
+
+    if (value instanceof Object) {
+      operation = new BooleanOperation({name, value});
+    } else {
+      operation = new FieldOperation({name, value});
+    }
+
+    return operation;
   }
 
   /**
@@ -56,13 +94,15 @@ class Filter {
    * @param delim
    * @returns {*}
    */
-  parseArray(content, delim) {
+  parseArray(content, operator) {
+    operator = operator || this.defaultSolrOperator;
+
     let results = null;
     let vals    = [];
     for (let i in content) {
       let value = content[i];
       if (value instanceof Object) {
-        value = '(' + this.parseObject(value, delim) + ')';
+        value = '(' + this.parseObject(value, operator, this.defaultSolrOperator) + ')';
       } else if (isNaN(value)) {
         value = '"' + value + '"';
       }
@@ -71,10 +111,10 @@ class Filter {
     }
 
     if (vals.length > 1) {
-      if (delim === this.defaultSolrOperator) {
+      if (operator === this.defaultSolrOperator) {
         results = '(' + vals.join(' ') + ')';
       } else {
-        results = '(' + vals.join(delim) + ')';
+        results = '(' + vals.join(operator) + ')';
       }
     } else {
       results = vals.join();
@@ -88,96 +128,78 @@ class Filter {
    * @param content
    * @returns {Array}
    */
-  parseObject(content, operator) {
+  parseObject(value, operator, defaultArrayOperator) {
     const filters = [];
-    const o       = {
-      id    : [1, 2, 3, 4],
-      typeId: [1, 2, 3, 4]
-    };
 
-    for (let name in content) {
-      let value     = content[name];
-      let operation = null;
+    for (let name in value) {
+      let content = value[name];
+      let results = null;
 
-      /** Check if value is an object **/
+      /** Check if content is an object **/
       switch (name) {
         case 'to':
-          operation = new ToOperation({value});
+          results = new ToOperation({content});
           break;
 
         case 'or':
-          value = this.parse(value, OR, name);
-
-          if (value instanceof Object) {
-            operation = new BooleanOperation({name, operator: AND, value: value});
-          } else {
-            operation = new FieldOperation({value});
-          }
+          console.log("KKKKKKKKKKKKKKKKKKKKKKKKKKKKK");
+          console.log(content, OR, operator, defaultArrayOperator)
+          results = this.parseOperation(null, content, OR, operator, defaultArrayOperator);
           break;
 
         case 'and':
-          value = this.parse(value, AND, name);
-
-          if (value instanceof Object) {
-            operation = new BooleanOperation({name, operator: AND, value: value});
-          } else {
-            operation = new FieldOperation({value});
-          }
+          results = this.parseOperation(null, content, AND, operator, defaultArrayOperator);
           break;
 
         default:
-          if (value instanceof Object) {
-            if (value instanceof Array) {
-              value = this.parseArray(value, this.defaultSolrOperator);
-            } else {
-              value = this.parseObject(value, this.defaultObjectOperator);
-            }
-
-            if (value.length) {
-              operation = new FieldOperation({name, value: value});
-            }
-
-          } else if (isNaN(name)) {
-            if (!isNaN(value) || (isNaN(value) && value.length)) {
-              operation = new FieldOperation({name, value});
-            }
-
-          } else {
-            operation = value;
-          }
+          console.log(name, content, operator, defaultArrayOperator);
+          results = this.parse(name, content, operator, defaultArrayOperator);
 
           break;
       }
 
-      if (operation) {
-        filters.push(operation);
+      if (results) {
+        filters.push(results);
       }
     }
 
-    return filters.join(AND);
+    return filters.join(operator);
   }
 
   /**
    *
    * @param content
-   * @param delim
+   * @param operator
    * @returns {*}
    */
-  parse(content, delim) {
+  parse(name, content, operator, arrayOperator) {
+    let results = content;
+
     this.parseDepth = this.parseDepth || 0;
     this.parseDepth++;
 
-    let results = content;
     if (content instanceof Object) {
       if (content instanceof Array) {
-        results = this.parseArray(content, delim);
+        console.log("OKKKKKKKKKKK");
+        console.log(content, operator, arrayOperator)
+        results = this.parseArray(content, arrayOperator);
 
       } else {
-        results = this.parseObject(content, delim);
+        results = this.parseObject(content, operator, arrayOperator);
+
+      }
+
+      if (results.length) {
+        results = new FieldOperation({name, value: results});
+      }
+    } else if (isNaN(name)) {
+      if (!isNaN(results) || (isNaN(results) && results.length)) {
+        results = new FieldOperation({name, value: results});
       }
     }
 
     this.parseDepth--;
+
     return results;
   }
 
@@ -198,9 +220,6 @@ class Filter {
     return filterStrings.join(AND);
   }
 
-  toString() {
-    return this.filterString;
-  }
 }
 
 module.exports = Filter;

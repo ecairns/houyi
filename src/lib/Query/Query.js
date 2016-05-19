@@ -1,31 +1,35 @@
-"use strict";
+'use strict';
 
 const Filter = require('./Filter');
-const _ = require('lodash');
+const _      = require('lodash');
 
 class Query {
-    constructor(query) {
-        if (query.q === undefined) query.q = { '*':'*' };
+  constructor(query) {
+      if (query.q === undefined) {
+          query.q = {'*': '*'};
+      }
 
-        this.query = this.build(query);
-    }
+      this.query = this.build(query);
+  }
 
-    build(query) {
-        _.forEach(query, (value, key) => {
-            switch (key) {
-                case 'query':
-                case 'q':
-                case 'fq':
-                    query[key] = new Filter(value).toString();
-                    break;
-                case 'fl':
-                    if (value instanceof Array) query[key] = value.join(',');
-                    break;
+  build(query) {
+    _.forEach(query, (value, key) => {
+      switch (key) {
+        case 'query':
+        case 'q':
+        case 'fq':
+          query[key] = new Filter(value).toString();
+          break;
+        case 'fl':
+            if (value instanceof Array) {
+                query[key] = value.join(',');
             }
-        });
-        
-        return query;
-    }
+            break;
+      }
+    });
+
+    return query;
+  }
 }
 
 module.exports = Query;

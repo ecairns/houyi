@@ -1,4 +1,4 @@
-"use strict";
+'use strict';
 
 class Field {
   constructor(field) {
@@ -18,4 +18,5 @@ class Field {
     return this.name + ':' + this.value;
   }
 }
+
 module.exports = Field;
