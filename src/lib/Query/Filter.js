@@ -15,15 +15,15 @@ class Filter {
    *
    * @param filter
    * @param defaultObjectOperator - Default operator used for objects, when operator is not specified.
-   * @param defaultSolrOperator - Solr default Operator, 'OR'
+   * @param defaultArrayOperator - Solr default Operator, 'OR'
    */
-  constructor(filter, defaultObjectOperator, defaultSolrOperator) {
+  constructor(filter, defaultObjectOperator, defaultArrayOperator) {
     defaultObjectOperator = defaultObjectOperator || AND;
-    defaultSolrOperator   = defaultSolrOperator || OR;
+    defaultArrayOperator  = defaultArrayOperator || OR;
     this.filter           = filter;
 
     this.defaultObjectOperator = this.checkOperator(defaultObjectOperator);
-    this.defaultSolrOperator   = this.checkOperator(defaultSolrOperator);
+    this.defaultArrayOperator  = this.checkOperator(defaultArrayOperator);
     if (filter) {
       this.toString();
     }
@@ -58,7 +58,7 @@ class Filter {
   toString() {
 
     if (!this.filterString) {
-      this.filter       = this.parse(null, this.filter, this.defaultObjectOperator, this.defaultSolrOperator);
+      this.filter       = this.parse(null, this.filter, this.defaultObjectOperator, this.defaultArrayOperator);
       this.filterString = this.build(this.filter);
     }
 
@@ -75,8 +75,6 @@ class Filter {
   parseOperation(name, value, operator, defaultArrayOperator) {
     let operation = null;
 
-    console.log("AAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA");
-    console.log(name, value, operator, defaultArrayOperator);
     value = this.parse(name, value, operator, defaultArrayOperator);
 
     if (value instanceof Object) {
@@ -95,14 +93,14 @@ class Filter {
    * @returns {*}
    */
   parseArray(content, operator) {
-    operator = operator || this.defaultSolrOperator;
+    operator = operator || this.defaultArrayOperator;
 
     let results = null;
     let vals    = [];
     for (let i in content) {
       let value = content[i];
       if (value instanceof Object) {
-        value = '(' + this.parseObject(value, operator, this.defaultSolrOperator) + ')';
+        value = '(' + this.parseObject(value, operator, this.defaultArrayOperator) + ')';
       } else if (isNaN(value)) {
         value = '"' + value + '"';
       }
@@ -111,7 +109,7 @@ class Filter {
     }
 
     if (vals.length > 1) {
-      if (operator === this.defaultSolrOperator) {
+      if (operator === this.defaultArrayOperator) {
         results = '(' + vals.join(' ') + ')';
       } else {
         results = '(' + vals.join(operator) + ')';
@@ -128,8 +126,10 @@ class Filter {
    * @param content
    * @returns {Array}
    */
-  parseObject(value, operator, defaultArrayOperator) {
+  parseObject(value, operator, arrayOperator) {
     const filters = [];
+    operator      = operator || this.defaultObjectOperator;
+    arrayOperator = arrayOperator || this.defaultArrayOperator;
 
     for (let name in value) {
       let content = value[name];
@@ -138,22 +138,36 @@ class Filter {
       /** Check if content is an object **/
       switch (name) {
         case 'to':
-          results = new ToOperation({content});
+          results = new ToOperation({value: content});
           break;
 
         case 'or':
-          console.log("KKKKKKKKKKKKKKKKKKKKKKKKKKKKK");
-          console.log(content, OR, operator, defaultArrayOperator)
-          results = this.parseOperation(null, content, OR, operator, defaultArrayOperator);
+          /**
+           * if content is an array, set the arrayOperator to the current operator
+           * {tags: {or: ["a","b"]}}
+           */
+          if (content instanceof Array) {
+            results = this.parseOperation(null, content, OR, OR);
+          } else {
+            results = this.parseOperation(null, content, OR, arrayOperator);
+          }
           break;
 
         case 'and':
-          results = this.parseOperation(null, content, AND, operator, defaultArrayOperator);
+          /**
+           * if content is an array, set the arrayOperator to the current operator
+           * {tags: {and: ["a","b"]}}
+           */
+          if (content instanceof Array) {
+            results = this.parseOperation(null, content, AND, AND);
+          } else {
+            results = this.parseOperation(null, content, AND, arrayOperator);
+
+          }
           break;
 
         default:
-          console.log(name, content, operator, defaultArrayOperator);
-          results = this.parse(name, content, operator, defaultArrayOperator);
+          results = this.parse(name, content, operator, arrayOperator);
 
           break;
       }
@@ -180,8 +194,6 @@ class Filter {
 
     if (content instanceof Object) {
       if (content instanceof Array) {
-        console.log("OKKKKKKKKKKK");
-        console.log(content, operator, arrayOperator)
         results = this.parseArray(content, arrayOperator);
 
       } else {
